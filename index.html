@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LoL Team Manager</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #e0e0e0; margin: 0; padding: 16px; }
+        h1 { font-size: 20px; color: #00d4ff; margin-bottom: 16px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab { flex: 1; padding: 10px; border: none; border-radius: 8px; background: #16213e; color: #a0a0a0; font-size: 14px; cursor: pointer; }
+        .tab.active { background: #e94560; color: white; }
+        .player-card { background: #16213e; border-radius: 12px; padding: 12px; margin-bottom: 12px; border: 1px solid #0f3460; }
+        .player-name { font-size: 18px; font-weight: bold; color: #e94560; margin-bottom: 8px; }
+        .tier-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; background: #0f3460; color: #00d4ff; margin-left: 8px; }
+        .role-row { display: flex; align-items: center; margin-bottom: 6px; gap: 8px; }
+        .role-name { width: 70px; font-size: 14px; color: #a0a0a0; }
+        .role-score { width: 50px; background: #0f3460; border: 1px solid #1a1a2e; color: #e0e0e0; border-radius: 4px; padding: 4px; text-align: center; }
+        .ban-checkbox { width: 20px; height: 20px; accent-color: #e94560; }
+        .priority-select { background: #0f3460; border: 1px solid #1a1a2e; color: #e0e0e0; border-radius: 4px; padding: 4px; font-size: 12px; }
+        .champ-input { width: 100%; background: #0f3460; border: 1px solid #1a1a2e; color: #e0e0e0; border-radius: 4px; padding: 6px; margin-top: 6px; font-size: 13px; }
+        .save-btn { background: #e94560; color: white; border: none; border-radius: 6px; padding: 8px 16px; font-size: 14px; cursor: pointer; margin-top: 8px; width: 100%; }
+        .save-btn:active { background: #c73650; }
+        .status { font-size: 12px; color: #00ff88; margin-top: 4px; min-height: 16px; }
+        .hidden { display: none; }
+        .player-select { display: flex; align-items: center; gap: 8px; padding: 8px; background: #16213e; border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
+        .player-select input { width: 20px; height: 20px; accent-color: #00d4ff; }
+        .player-select span { font-size: 16px; }
+        .player-select.selected { border: 1px solid #00d4ff; }
+        .variant-card { background: #0f3460; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+        .variant-title { font-size: 16px; font-weight: bold; color: #00d4ff; margin-bottom: 8px; }
+        .variant-row { font-size: 14px; margin-bottom: 4px; }
+        .variant-total { font-size: 14px; color: #e94560; margin-top: 8px; }
+        #roles-assignment {
+            min-height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 LoL Team Manager</h1>
+    <div class="tabs">
+    <button class="tab active" id="tab-admin">Админ</button>
+    <button class="tab" id="tab-captain">Капитан</button>
+    <button class="tab" id="tab-draft">Драфт</button>
+</div>
+
+
+
+    <!-- Админ-панель -->
+    <div id="admin-panel">
+        <div style="background:#16213e; border-radius:12px; padding:12px; margin-bottom:12px;">
+            <h3 style="color:#00d4ff; font-size:14px;">Настройки</h3>
+            <label style="font-size:13px; color:#a0a0a0;">Максимальный балл команды:</label>
+            <input id="max-score-input" type="number" value="30" style="width:80px; background:#0f3460; border:1px solid #1a1a2e; color:#e0e0e0; border-radius:4px; padding:4px; margin-left:8px;">
+            <div id="settings-status" style="font-size:12px; color:#00ff88; margin-top:4px;"></div>
+        </div>
+        <button class="save-btn" id="save-all-btn" style="margin-bottom:12px; background:#00d4ff; color:#1a1a2e; font-weight:bold;">💾 Сохранить все изменения</button>
+        <div id="save-all-status" style="font-size:13px; color:#00ff88; margin-bottom:12px;"></div>
+        <div id="players-container">Загрузка...</div>
+    </div>
+
+    <!-- Экран капитана -->
+    <div id="captain-panel" class="hidden">
+        <h2 style="color:#00d4ff; font-size:16px;">Выбери 5 игроков:</h2>
+        <div id="active-pool"></div>
+        <button id="auto-btn" class="save-btn" style="margin-top:16px;">🤖 Собрать команду</button>
+        <div id="variants-container"></div>
+    </div>
+
+<div id="draft-panel" class="hidden">
+    <h2 style="color:#00d4ff; font-size:16px;">Пик на выбывание</h2>
+    <div style="display:flex; gap:8px; margin-bottom:16px;">
+        <button class="save-btn" id="reset-draft-btn" style="background:#c73650; flex:1;">Сбросить драфт</button>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <div style="flex:1; background:#16213e; border-radius:12px; padding:12px;">
+            <h3 style="color:#e94560; font-size:14px;">Команда 1</h3>
+            <div id="team1-list"></div>
+        </div>
+        <div style="flex:1; background:#16213e; border-radius:12px; padding:12px;">
+            <h3 style="color:#00d4ff; font-size:14px;">Команда 2</h3>
+            <div id="team2-list"></div>
+        </div>
+    </div>
+    <h3 style="color:#a0a0a0; font-size:14px; margin-top:16px;">Доступные игроки:</h3>
+    <div id="draft-pool"></div>
+  <div id="roles-assignment" class="hidden">
+        <h2 style="color:#00d4ff; font-size:16px; margin-top:24px;">Распределение по ролям</h2>
+        <div style="display:flex; gap:8px;">
+            <div style="flex:1; background:#16213e; border-radius:12px; padding:12px;">
+                <h3 style="color:#e94560; font-size:14px;">Команда 1</h3>
+                <button class="save-btn" id="draft-auto-btn-1" style="margin-top:4px; margin-bottom:8px;">🤖 Автоподбор</button>
+                <div id="team1-roles"></div>
+                <button class="save-btn" id="save-roles-1" style="margin-top:8px;">Сохранить</button>
+                <div id="team1-sum" style="font-size:14px; color:#e94560; margin-top:4px;"></div>
+            </div>
+            <div style="flex:1; background:#16213e; border-radius:12px; padding:12px;">
+                <h3 style="color:#00d4ff; font-size:14px;">Команда 2</h3>
+                <button class="save-btn" id="draft-auto-btn-2" style="margin-top:4px; margin-bottom:8px;">🤖 Автоподбор</button>
+                <div id="team2-roles"></div>
+                <button class="save-btn" id="save-roles-2" style="margin-top:8px;">Сохранить</button>
+                <div id="team2-sum" style="font-size:14px; color:#00d4ff; margin-top:4px;"></div>
+            </div>
+        </div>
+
+        <div style="margin-top:16px;">
+            <h3 style="color:#a0a0a0; font-size:14px;">Антибаны (2 от каждой команды):</h3>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+                <div style="flex:1;">
+                    <label style="font-size:12px; color:#e94560;">Команда 1:</label>
+                    <input class="champ-input" id="bans-team1" type="text" placeholder="Герой 1, Герой 2">
+                    <button class="save-btn" id="save-bans-1" style="margin-top:4px;">Сохранить</button>
+                </div>
+                <div style="flex:1;">
+                    <label style="font-size:12px; color:#00d4ff;">Команда 2:</label>
+                    <input class="champ-input" id="bans-team2" type="text" placeholder="Герой 1, Герой 2">
+                    <button class="save-btn" id="save-bans-2" style="margin-top:4px;">Сохранить</button>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:16px; background:#16213e; border-radius:12px; padding:12px;">
+            <h3 style="color:#00d4ff; font-size:14px;">Завершение игры</h3>
+            <div style="margin-top:8px;">
+                <label style="font-size:13px; color:#a0a0a0;">Победитель:</label>
+                <select id="winner-select" style="background:#0f3460; border:1px solid #1a1a2e; color:#e0e0e0; border-radius:4px; padding:4px; margin-left:8px;">
+                    <option value="1">Команда 1</option>
+                    <option value="2">Команда 2</option>
+                </select>
+            </div>
+            <div id="champions-container" style="margin-top:12px;"></div>
+            <button class="save-btn" id="finish-game-btn" style="background:#00d4ff; color:#1a1a2e; font-weight:bold; margin-top:12px;">🏁 Завершить игру</button>
+            <div id="finish-status" style="font-size:13px; color:#00ff88; margin-top:4px;"></div>
+        </div>
+   </div>
+    <script>
+        const API_URL = 'http://localhost:8000/api';
+        let roles = [];
+        let selectedPlayers = [];
+        let draftInterval = null;
+        let rolesRendered = false;
+
+        const tg = window.Telegram?.WebApp;
+        if (tg) { tg.ready(); tg.expand(); }
+
+          // Переключение вкладок
+        document.getElementById('tab-admin').addEventListener('click', () => {
+            document.getElementById('admin-panel').classList.remove('hidden');
+            document.getElementById('captain-panel').classList.add('hidden');
+            document.getElementById('draft-panel').classList.add('hidden');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-admin').classList.add('active');
+            if (draftInterval) { clearInterval(draftInterval); draftInterval = null; }
+        });
+        document.getElementById('tab-captain').addEventListener('click', () => {
+            document.getElementById('admin-panel').classList.add('hidden');
+            document.getElementById('captain-panel').classList.remove('hidden');
+            document.getElementById('draft-panel').classList.add('hidden');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-captain').classList.add('active');
+            loadActivePool();
+            if (draftInterval) { clearInterval(draftInterval); draftInterval = null; }
+        });
+        document.getElementById('tab-draft').addEventListener('click', () => {
+            document.getElementById('admin-panel').classList.add('hidden');
+            document.getElementById('captain-panel').classList.add('hidden');
+            document.getElementById('draft-panel').classList.remove('hidden');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-draft').classList.add('active');
+            loadDraft();
+            if (draftInterval) clearInterval(draftInterval);
+            draftInterval = setInterval(loadDraft, 2000);
+        });
+
+        async function loadRoles() {
+            const res = await fetch(`${API_URL}/roles`);
+            roles = await res.json();
+        }
+
+        // --- Админ-панель ---
+        async function loadPlayers() {
+            const res = await fetch(`${API_URL}/players`);
+            const players = await res.json();
+            const container = document.getElementById('players-container');
+            container.innerHTML = '';
+            for (const player of players) {
+                const playerRes = await fetch(`${API_URL}/player/${player.id}`);
+                const playerData = await playerRes.json();
+                const card = document.createElement('div');
+                card.className = 'player-card';
+                card.dataset.playerId = player.id;
+                card.dataset.playerName = player.name;
+                let rolesHtml = '';
+                for (const role of roles) {
+                    const roleData = playerData.roles[role.name] || { score: 0, is_banned: 0, is_priority: 0 };
+                    rolesHtml += `
+                        <div class="role-row">
+                            <span class="role-name">${role.name}</span>
+                            <input class="role-score" type="number" value="${roleData.score}" data-role="${role.name}">
+                            <input class="ban-checkbox" type="checkbox" ${roleData.is_banned ? 'checked' : ''} data-role="${role.name}" title="Запрет на роль">
+                        </div>
+                    `;
+                }
+
+                let priorityHtml = '';
+                const lowTiers = ['C', 'D'];
+                if (lowTiers.includes(playerData.global_tier)) {
+                    const options = roles.map(r => 
+                        `<option value="${r.name}" ${playerData.roles[r.name]?.is_priority ? 'selected' : ''}>${r.name}</option>`
+                    ).join('');
+                    priorityHtml = `
+                        <div class="role-row">
+                            <span class="role-name">Приоритет</span>
+                            <select class="priority-select" data-priority>
+                                <option value="">Нет</option>
+                                ${options}
+                            </select>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <div class="player-name">${playerData.name} <span class="tier-badge">${playerData.global_tier}</span></div>
+                    ${rolesHtml}
+                    ${priorityHtml}
+                    <input class="champ-input" type="text" value="${playerData.champion_bans.join(', ')}" placeholder="Запреты на героев (через запятую)" data-champs>
+                    <label style="display:flex; align-items:center; gap:8px; margin-top:8px; font-size:14px;">
+                        <input type="checkbox" class="active-checkbox" ${player.is_active_session ? 'checked' : ''}> Активен в сессии
+                    </label>
+                    <div class="status" data-status></div>
+                `;
+
+
+                container.appendChild(card);
+            }
+        }
+
+        // --- Экран капитана ---
+        async function loadActivePool() {
+            const res = await fetch(`${API_URL}/players`);
+            const allPlayers = await res.json();
+            const activePlayers = allPlayers.filter(p => p.is_active_session === 1);
+            const container = document.getElementById('active-pool');
+            container.innerHTML = '';
+            selectedPlayers = [];
+
+            if (activePlayers.length === 0) {
+                container.innerHTML = '<p style="color:#e94560;">Нет активных игроков. Отметь их в админ-панели (поле is_active_session).</p>';
+                return;
+            }
+
+            for (const player of activePlayers) {
+                const div = document.createElement('div');
+                div.className = 'player-select';
+                div.innerHTML = `<input type="checkbox" value="${player.id}" data-name="${player.name}"><span>${player.global_tier} — ${player.name}</span>`;
+                div.querySelector('input').addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        div.classList.add('selected');
+                        selectedPlayers.push({ id: player.id, name: player.name });
+                    } else {
+                        div.classList.remove('selected');
+                        selectedPlayers = selectedPlayers.filter(p => p.id !== player.id);
+                    }
+                });
+                container.appendChild(div);
+            }
+        }
+
+        document.getElementById('auto-btn').addEventListener('click', async () => {
+            if (selectedPlayers.length !== 5) {
+                alert('Выбери ровно 5 игроков!');
+                return;
+            }
+            const names = selectedPlayers.map(p => p.name);
+            const res = await fetch(`${API_URL}/auto`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ names: names })
+            });
+            const data = await res.json();
+            const container = document.getElementById('variants-container');
+            container.innerHTML = '';
+
+            if (data.error) {
+                container.innerHTML = `<p style="color:#e94560;">${data.error}</p>`;
+                return;
+            }
+
+            data.variants.forEach((v, idx) => {
+                const div = document.createElement('div');
+                div.className = 'variant-card';
+                div.innerHTML = `<div class="variant-title">Вариант ${idx + 1} (сумма: ${v.total_score})</div>`;
+                v.roles.forEach(r => {
+                    const diff = r.score - r.base_score;
+                    let diffText = '';
+                    if (diff > 0) diffText = ` (штраф +${diff})`;
+                    else if (diff < 0) diffText = ` (поблажка ${diff})`;
+                    div.innerHTML += `<div class="variant-row">${r.role}: ${r.tier} — ${r.name} (балл: ${r.score}${diffText})</div>`;
+                });
+                container.appendChild(div);
+            });
+        });
+
+
+
+async function loadDraft() {
+    const res = await fetch(`${API_URL}/draft/state`);
+    const data = await res.json();
+    const turnEl = document.getElementById('draft-turn') || (() => {
+        const el = document.createElement('div');
+        el.id = 'draft-turn';
+        el.style.cssText = 'font-size:16px;font-weight:bold;margin-bottom:12px;';
+        document.getElementById('draft-panel').insertBefore(el, document.getElementById('draft-panel').firstChild);
+        return el;
+    })();
+    turnEl.textContent = `Сейчас ход: Команда ${data.turn}`;
+    turnEl.style.color = data.turn === 1 ? '#e94560' : '#00d4ff';
+
+    const team1List = document.getElementById('team1-list');
+    const team2List = document.getElementById('team2-list');
+    const pool = document.getElementById('draft-pool');
+
+    team1List.innerHTML = '';
+    team2List.innerHTML = '';
+    pool.innerHTML = '';
+
+       data.picked.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'variant-row';
+        let text = `${p.global_tier} — ${p.name}`;
+        if (p.is_random_sss === 1 && p.fixed_role_id) {
+            // Получаем название роли по id
+            const roleObj = roles.find(r => r.id === p.fixed_role_id);
+            const roleName = roleObj ? roleObj.name : '?';
+            text += ` (Рандом: ${roleName} — ${p.fixed_champion || '?'}, -2 балла)`;
+        }
+        div.textContent = text;
+        if (p.global_tier === 'SSS') {
+            const btn = document.createElement('button');
+            btn.textContent = 'Рандом';
+            btn.style.cssText = 'background:#00d4ff;color:#1a1a2e;border:none;border-radius:4px;padding:2px 6px;font-size:11px;cursor:pointer;margin-left:6px;';
+            btn.addEventListener('click', () => openRandomModal(p.player_id, p.team, p.name));
+            div.appendChild(btn);
+        }
+        if (p.team === 1) team1List.appendChild(div);
+        else team2List.appendChild(div);
+    });
+
+    data.available.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'player-select';
+        div.innerHTML = `<span>${p.global_tier} — ${p.name}</span>`;
+        const btn1 = document.createElement('button');
+        btn1.textContent = 'В команду 1';
+        btn1.style.cssText = 'background:#e94560;color:white;border:none;border-radius:4px;padding:4px 8px;font-size:12px;cursor:pointer;margin-left:8px;';
+        btn1.disabled = data.turn !== 1;
+        btn1.style.opacity = data.turn !== 1 ? 0.5 : 1;
+        btn1.addEventListener('click', async () => {
+            const res = await fetch(`${API_URL}/draft/pick`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_id: p.id, team: 1 })
+            });
+            const result = await res.json();
+            if (result.error) alert(result.error);
+            loadDraft();
+        });
+        const btn2 = document.createElement('button');
+        btn2.textContent = 'В команду 2';
+        btn2.style.cssText = 'background:#00d4ff;color:#1a1a2e;border:none;border-radius:4px;padding:4px 8px;font-size:12px;cursor:pointer;margin-left:4px;';
+        btn2.disabled = data.turn !== 2;
+        btn2.style.opacity = data.turn !== 2 ? 0.5 : 1;
+        btn2.addEventListener('click', async () => {
+            const res = await fetch(`${API_URL}/draft/pick`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_id: p.id, team: 2 })
+            });
+            const result = await res.json();
+            if (result.error) alert(result.error);
+            loadDraft();
+        });
+        div.appendChild(btn1);
+        div.appendChild(btn2);
+        pool.appendChild(div);
+    });
+ // Проверяем, набраны ли обе команды по 5
+    const team1Count = data.picked.filter(p => p.team === 1).length;
+    const team2Count = data.picked.filter(p => p.team === 2).length;
+    const rolesAssignment = document.getElementById('roles-assignment');
+
+        if (team1Count === 5 && team2Count === 5) {
+            rolesAssignment.classList.remove('hidden');
+            if (!rolesRendered) {
+                renderRoleAssignment(data.picked.filter(p => p.team === 1), 1);
+                renderRoleAssignment(data.picked.filter(p => p.team === 2), 2);
+                renderChampionInputs();
+                rolesRendered = true;
+            }
+            loadBans();
+        } else {
+            rolesAssignment.classList.add('hidden');
+            rolesRendered = false;
+        }
+}
+
+document.getElementById('reset-draft-btn').addEventListener('click', async () => {
+    await fetch(`${API_URL}/draft/reset`, { method: 'POST' });
+    loadDraft();
+});
+
+async function recalcTeamSum(teamNum, teamPlayers) {
+    const container = document.getElementById(`team${teamNum}-roles`);
+    const selects = container.querySelectorAll('select');
+    const assignments = {};
+    selects.forEach(sel => {
+        assignments[sel.dataset.playerId] = parseInt(sel.value);
+    });
+
+    // Отправляем распределение на сервер, чтобы он посчитал сумму
+    const saveRes = await fetch(`${API_URL}/draft/roles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team: teamNum, assignments: assignments })
+    });
+    const saveData = await saveRes.json();
+
+    if (saveData.error) {
+        document.getElementById(`team${teamNum}-sum`).textContent = `⚠️ ${saveData.error}`;
+        return;
+    }
+
+    const res = await fetch(`${API_URL}/draft/team_score/${teamNum}`);
+    const data = await res.json();
+    document.getElementById(`team${teamNum}-sum`).textContent = `Сумма: ${data.total}`;
+}
+
+
+async function renderRoleAssignment(teamPlayers, teamNum) {
+    const container = document.getElementById(`team${teamNum}-roles`);
+    container.innerHTML = '';
+
+    // Получаем текущее распределение с сервера
+    const res = await fetch(`${API_URL}/draft/roles`);
+    const rolesData = await res.json();
+    const existing = rolesData[teamNum] || [];
+
+    let totalScore = 0;
+
+    for (const player of teamPlayers) {
+        const div = document.createElement('div');
+        div.className = 'role-row';
+        div.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:6px;';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = `${player.global_tier} — ${player.name}`;
+        nameSpan.style.cssText = 'flex:1; font-size:13px;';
+
+        // Получаем данные игрока для проверки запретов
+        const playerRes = await fetch(`${API_URL}/player/${player.player_id}`);
+        const playerData = await playerRes.json();
+
+        // Вечные запреты на героев (ПОСЛЕ playerData!)
+        const bansSpan = document.createElement('span');
+        bansSpan.style.cssText = 'font-size:11px; color:#e94560; margin-left:4px;';
+        if (playerData.champion_bans && playerData.champion_bans.length > 0) {
+            bansSpan.textContent = '🚫 ' + playerData.champion_bans.join(', ');
+        }
+
+        const select = document.createElement('select');
+        select.className = 'priority-select';
+        select.dataset.playerId = player.player_id;
+        select.style.cssText = 'width:100px;';
+        const isFixed = player.is_random_sss === 1 && player.fixed_role_id;
+
+        // История ролей: две игры подряд на одной роли
+        const historyRes = await fetch(`${API_URL}/player/${player.player_id}/role_history`);
+        let blockedRoleId = null;
+        if (historyRes.ok) {
+            const historyData = await historyRes.json();
+            blockedRoleId = historyData.blocked_role_id;
+        }
+
+        for (const role of roles) {
+            const opt = document.createElement('option');
+            opt.value = role.id;
+            opt.textContent = role.name;
+
+            // Проверка запрета на роль
+            const roleData = playerData.roles[role.name];
+            if (roleData && roleData.is_banned) {
+                opt.disabled = true;
+            }
+
+            // Проверка истории: две игры подряд на этой роли
+            if (blockedRoleId === role.id) {
+                opt.disabled = true;
+            }
+
+            if (isFixed) {
+                if (role.id !== player.fixed_role_id) {
+                    opt.disabled = true;
+                } else {
+                    opt.selected = true;
+                }
+            } else {
+                const existingRole = existing.find(e => e.player_id === player.player_id);
+                if (existingRole && existingRole.role_id === role.id) opt.selected = true;
+            }
+            select.appendChild(opt);
+        }
+        if (isFixed) {
+            select.disabled = true;
+        }
+
+        select.addEventListener('change', async () => {
+            recalcTeamSum(teamNum, teamPlayers);
+
+            // Удаляем старую пометку
+            const oldMark = div.querySelector('.champion-mark');
+            if (oldMark) oldMark.remove();
+
+            // Проверяем историю персонажа на выбранной роли
+            const selectedRoleId = parseInt(select.value);
+            const histRes = await fetch(`${API_URL}/player/${player.player_id}/champion_history?role_id=${selectedRoleId}`);
+            if (histRes.ok) {
+                const histData = await histRes.json();
+                if (histData.blocked_champion) {
+                    const mark = document.createElement('span');
+                    mark.className = 'champion-mark';
+                    mark.style.cssText = 'font-size:11px; color:#e94560; margin-left:4px;';
+                    mark.textContent = '🚫 ' + histData.blocked_champion;
+                    // Вставляем рядом с bansSpan (там же, где вечные запреты)
+                    bansSpan.parentNode.insertBefore(mark, bansSpan.nextSibling);
+                }
+            }
+        });
+
+        div.appendChild(nameSpan);
+        div.appendChild(bansSpan);
+        div.appendChild(select);
+        container.appendChild(div);
+    }
+
+    // Проверяем историю персонажей для уже выбранных ролей
+    for (const player of teamPlayers) {
+        const select = document.querySelector(`#team${teamNum}-roles select[data-player-id="${player.player_id}"]`);
+        if (!select) continue;
+        const rid = parseInt(select.value);
+        const histRes = await fetch(`${API_URL}/player/${player.player_id}/champion_history?role_id=${rid}`);
+        if (histRes.ok) {
+            const histData = await histRes.json();
+            if (histData.blocked_champion) {
+                const div = select.closest('.role-row');
+                const bansSpan = div.querySelector('span'); // первый span — это nameSpan, второй — bansSpan
+                const mark = document.createElement('span');
+                mark.className = 'champion-mark';
+                mark.style.cssText = 'font-size:11px; color:#e94560; margin-left:4px;';
+                mark.textContent = '🚫 ' + histData.blocked_champion;
+                // Вставляем после nameSpan (рядом с bansSpan)
+                const nameSpan = div.querySelector('span');
+                if (nameSpan && nameSpan.nextSibling) {
+                    div.insertBefore(mark, nameSpan.nextSibling);
+                } else {
+                    div.appendChild(mark);
+                }
+            }
+        }
+    }
+
+    await recalcTeamSum(teamNum, teamPlayers);
+}
+
+async function saveRoles(teamNum) {
+
+    const container = document.getElementById(`team${teamNum}-roles`);
+    const selects = container.querySelectorAll('select');
+    const assignments = {};
+    selects.forEach(sel => {
+        assignments[sel.dataset.playerId] = parseInt(sel.value);
+    });
+
+    const res = await fetch(`${API_URL}/draft/roles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team: teamNum, assignments: assignments })
+    });
+    const data = await res.json();
+    if (data.error) {
+        alert('Ошибка: ' + data.error);
+    } else {
+        alert('Распределение команды ' + teamNum + ' сохранено.');
+    }
+}
+
+document.getElementById('save-roles-1').addEventListener('click', () => saveRoles(1));
+document.getElementById('save-roles-2').addEventListener('click', () => saveRoles(2));
+
+async function saveBans(teamNum) {
+    const input = document.getElementById(`bans-team${teamNum}`);
+    const champions = input.value.split(',').map(s => s.trim()).filter(s => s);
+    if (champions.length !== 2) {
+        alert('Введи ровно 2 героя через запятую.');
+        return;
+    }
+    const res = await fetch(`${API_URL}/draft/bans`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team: teamNum, champions: champions })
+    });
+    const data = await res.json();
+    if (data.error) {
+        alert('Ошибка: ' + data.error);
+    } else {
+        alert('Антибаны команды ' + teamNum + ' сохранены.');
+    }
+}
+
+document.getElementById('save-bans-1').addEventListener('click', () => saveBans(1));
+document.getElementById('save-bans-2').addEventListener('click', () => saveBans(2));
+
+async function loadBans() {
+    const res = await fetch(`${API_URL}/draft/bans`);
+    const data = await res.json();
+    document.getElementById('bans-team1').value = (data[1] || []).join(', ');
+    document.getElementById('bans-team2').value = (data[2] || []).join(', ');
+}
+
+function openRandomModal(playerId, team, playerName) {
+    const roleName = prompt(`Игрок ${playerName} (SSS). Введи роль (Top, Jungle, Mid, ADC, Support):`);
+    if (!roleName) return;
+    const champion = prompt(`Введи имя персонажа (например, Пайк):`);
+    if (!champion) return;
+    fetch(`${API_URL}/draft/random_sss`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: playerId, team: team, role_name: roleName, champion_name: champion })
+    }).then(res => res.json()).then(data => {
+        if (data.error) {
+            alert('Ошибка: ' + data.error);
+        } else {
+            alert('Рандом зафиксирован: ' + roleName + ' — ' + champion);
+        }
+        loadDraft();
+    }).catch(err => {
+        alert('Ошибка соединения: ' + err);
+    });
+}
+
+        async function loadSettings() {
+            const res = await fetch(`${API_URL}/settings`);
+            const data = await res.json();
+            document.getElementById('max-score-input').value = data.max_score_threshold;
+
+            const finishedRes = await fetch(`${API_URL}/game_finished`);
+            const finishedData = await finishedRes.json();
+            const statusEl = document.getElementById('settings-status');
+            if (finishedData.finished === 1) {
+                statusEl.textContent = '🏁 Игра завершена. Сбросьте драфт для новой игры.';
+                statusEl.style.color = '#e94560';
+            } else {
+                statusEl.textContent = '';
+            }
+        }
+
+document.getElementById('save-all-btn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('save-all-status');
+    statusEl.textContent = '⏳ Сохранение...';
+
+    // 1. Сохраняем настройки
+    const maxScore = parseInt(document.getElementById('max-score-input').value) || 30;
+    await fetch(`${API_URL}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ max_score_threshold: maxScore })
+    });
+
+    // 2. Сохраняем всех игроков
+    const cards = document.querySelectorAll('.player-card');
+    let saved = 0;
+    let errors = 0;
+
+    for (const card of cards) {
+        const playerId = card.dataset.playerId;
+        const scores = {}, bans = {};
+        card.querySelectorAll('.role-score').forEach(input => { scores[input.dataset.role] = parseFloat(input.value) || 0; });
+        card.querySelectorAll('.ban-checkbox').forEach(input => { bans[input.dataset.role] = input.checked ? 1 : 0; });
+        const prioritySelect = card.querySelector('.priority-select');
+        const priorityRole = prioritySelect ? prioritySelect.value || null : null;
+        const champInput = card.querySelector('.champ-input');
+        const championBans = champInput.value.split(',').map(s => s.trim()).filter(s => s);
+        const activeCheckbox = card.querySelector('.active-checkbox');
+        const isActive = activeCheckbox.checked ? 1 : 0;
+
+        const body = {
+            name: card.dataset.playerName,
+            scores,
+            bans,
+            priority_role: priorityRole,
+            champion_bans: championBans,
+            is_active_session: isActive
+        };
+
+        const res = await fetch(`${API_URL}/player/${playerId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (res.ok) saved++;
+        else errors++;
+    }
+
+    statusEl.textContent = `✅ Сохранено: ${saved} игроков, настройки. ${errors > 0 ? '❌ Ошибок: ' + errors : ''}`;
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+});
+
+document.getElementById('draft-auto-btn-1').addEventListener('click', () => autoForTeam(1));
+document.getElementById('draft-auto-btn-2').addEventListener('click', () => autoForTeam(2));
+
+async function autoForTeam(teamNum) {
+    const stateRes = await fetch(`${API_URL}/draft/state`);
+    const state = await stateRes.json();
+    const teamPlayers = state.picked.filter(p => p.team === teamNum);
+    const teamNames = teamPlayers.map(p => p.name);
+
+    if (teamNames.length !== 5) {
+        alert(`В команде ${teamNum} должно быть 5 игроков.`);
+        return;
+    }
+
+    const res = await fetch(`${API_URL}/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ names: teamNames })
+    });
+    const data = await res.json();
+
+    if (data.error) {
+        alert('Ошибка автоподбора: ' + data.error);
+        return;
+    }
+
+    showAutoVariants(teamNum, data.variants, teamPlayers);
+}
+
+function showAutoVariants(teamNum, variants, teamPlayers) {
+    const oldBlock = document.getElementById(`auto-variants-${teamNum}`);
+    if (oldBlock) oldBlock.remove();
+
+    const container = document.getElementById(`team${teamNum}-roles`);
+    const block = document.createElement('div');
+    block.id = `auto-variants-${teamNum}`;
+    block.style.cssText = 'margin-top:8px; background:#0f3460; border-radius:8px; padding:8px;';
+    block.innerHTML = `<div style="font-size:12px; color:#00d4ff; margin-bottom:4px;">Варианты автоподбора (нажми, чтобы применить):</div>`;
+
+    variants.forEach((v, idx) => {
+        const btn = document.createElement('button');
+        btn.style.cssText = 'display:block; width:100%; text-align:left; background:#16213e; color:#e0e0e0; border:1px solid #1a1a2e; border-radius:4px; padding:6px; margin-bottom:4px; font-size:11px; cursor:pointer;';
+        let text = `Вариант ${idx + 1} (сумма: ${v.total_score}): `;
+        text += v.roles.map(r => `${r.role}=${r.name}`).join(', ');
+        btn.textContent = text;
+        btn.addEventListener('click', async () => {
+            const assignments = {};
+            for (const r of v.roles) {
+                const player = teamPlayers.find(p => p.name === r.name);
+                if (player) {
+                    const roleObj = roles.find(ro => ro.name === r.role);
+                    if (roleObj) assignments[player.player_id] = roleObj.id;
+                }
+            }
+            const saveRes = await fetch(`${API_URL}/draft/roles`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ team: teamNum, assignments: assignments })
+            });
+            const saveData = await saveRes.json();
+            if (saveData.error) {
+                alert('Ошибка: ' + saveData.error);
+            } else {
+                rolesRendered = false;
+                loadDraft();
+            }
+        });
+        block.appendChild(btn);
+    });
+
+    container.parentElement.insertBefore(block, container.nextSibling);
+}
+
+async function renderChampionInputs() {
+    const container = document.getElementById('champions-container');
+    container.innerHTML = '<div style="font-size:12px; color:#a0a0a0; margin-bottom:4px;">Персонажи каждого игрока:</div>';
+
+    const rolesRes = await fetch(`${API_URL}/draft/roles`);
+    const rolesData = await rolesRes.json();
+
+    for (const teamNum of [1, 2]) {
+        const teamPlayers = rolesData[teamNum] || [];
+        if (teamPlayers.length === 0) continue;
+
+        const teamHeader = document.createElement('div');
+        teamHeader.style.cssText = `font-size:13px; font-weight:bold; color:${teamNum === 1 ? '#e94560' : '#00d4ff'}; margin-top:8px;`;
+        teamHeader.textContent = `Команда ${teamNum}`;
+        container.appendChild(teamHeader);
+
+        for (const p of teamPlayers) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:4px;';
+            row.innerHTML = `
+                <span style="flex:1; font-size:12px;">${p.tier} — ${p.name} (${p.role_name})</span>
+                <input class="champ-input" type="text" data-player-id="${p.player_id}" placeholder="Персонаж" style="width:150px; margin-top:0;">
+            `;
+            container.appendChild(row);
+        }
+    }
+}
+
+document.getElementById('finish-game-btn').addEventListener('click', async () => {
+    const winner = parseInt(document.getElementById('winner-select').value);
+    const inputs = document.querySelectorAll('#champions-container input[data-player-id]');
+    const champions = {};
+    let allFilled = true;
+    inputs.forEach(inp => {
+        const val = inp.value.trim();
+        if (!val) allFilled = false;
+        champions[inp.dataset.playerId] = val;
+    });
+
+    if (!allFilled) {
+        alert('Заполни персонажей для всех игроков.');
+        return;
+    }
+
+    if (!confirm('Завершить игру? Драфт будет очищен.')) return;
+
+    const res = await fetch(`${API_URL}/draft/finish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ winner_team: winner, champions: champions })
+    });
+    const data = await res.json();
+
+    const statusEl = document.getElementById('finish-status');
+    if (data.error) {
+        statusEl.textContent = '❌ ' + data.error;
+        statusEl.style.color = '#e94560';
+    } else {
+        statusEl.textContent = '✅ Игра завершена! ID: ' + data.game_id;
+        statusEl.style.color = '#00ff88';
+        rolesRendered = false;
+        loadSettings();
+        setTimeout(() => { loadDraft(); }, 1500);
+    }
+});
+        (async () => {
+            await loadRoles();
+            await loadPlayers();
+            await loadSettings();
+        })();
+    </script>
+</body>
+</html>
